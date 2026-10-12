@@ -1,4 +1,4 @@
-# Sistema Web Asilo de Ancianos Nueva Vida
+# Sistema Web Asilo 
 
 Sistema web para la gestión médica, administrativa y financiera del Asilo de Ancianos Nueva Vida.
 
