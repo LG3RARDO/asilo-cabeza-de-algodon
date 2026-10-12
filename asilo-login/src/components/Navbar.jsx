@@ -12,7 +12,7 @@ function Navbar({ usuario, onLogout }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <span style={{ fontSize: '22px' }}>🏥</span>
         <span style={{ color: 'white', fontWeight: 'bold', fontSize: '16px' }}>
-          Sistema Asilo Nueva Vida
+          Sistema Asilo Cabeza de Algodón
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

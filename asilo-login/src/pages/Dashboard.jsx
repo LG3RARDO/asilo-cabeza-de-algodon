@@ -32,7 +32,7 @@ function Dashboard() {
           Panel de control
         </h2>
         <p style={{ color: '#666', marginBottom: '32px' }}>
-          Bienvenido al Sistema Web del Asilo de Ancianos Nueva Vida
+          Bienvenido al Sistema Web del Asilo de Ancianos Cabeza de Algodón
         </p>
 
         <div style={{

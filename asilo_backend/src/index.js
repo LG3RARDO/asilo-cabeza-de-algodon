@@ -20,7 +20,7 @@ app.use('/api/auth', authRouter);
 // Ruta de prueba
 app.get('/', (req, res) => {
   res.json({ 
-    mensaje: 'API Sistema Asilo Nueva Vida funcionando',
+    mensaje: 'API Sistema Asilo Cabeza de Algodón funcionando',
     version: '1.0.0'
   });
 });

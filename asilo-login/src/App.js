@@ -68,7 +68,7 @@ function Login() {
             <span style={{ fontSize: '28px' }}>🏥</span>
           </div>
           <h2 style={{ color: '#0B2A4A', margin: '0', fontSize: '20px' }}>
-            Sistema Asilo Nueva Vida
+            Sistema Asilo Cabeza de Algodón
           </h2>
           <p style={{ color: '#666', fontSize: '13px', margin: '4px 0 0 0' }}>
             Inicie sesión para continuar
