@@ -28,7 +28,8 @@ const crearPaciente = async (req, res) => {
   try {
     const {
       codigo, nombres, fecha_nacimiento, fecha_ingreso,
-      motivo_reclusion, psicopatologia, estado
+      motivo_reclusion, psicopatologia, estado,
+        nombre_familiar, correo_familiar
     } = req.body;
 
     const existe = await Paciente.findOne({ where: { codigo } });
@@ -38,7 +39,8 @@ const crearPaciente = async (req, res) => {
 
     const nuevoPaciente = await Paciente.create({
       codigo, nombres, fecha_nacimiento, fecha_ingreso,
-      motivo_reclusion, psicopatologia, estado
+      motivo_reclusion, psicopatologia, estado,
+      nombre_familiar, correo_familiar
     });
 
     res.status(201).json({ mensaje: 'Paciente registrado exitosamente.', paciente: nuevoPaciente });
