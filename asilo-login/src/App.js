@@ -38,7 +38,7 @@ function Login() {
     try {
       setCargando(true);
       setError('');
-      const respuesta = await axios.post('http://localhost:4000/api/auth/login', {
+      const respuesta = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/auth/login`, {
         correo: usuario,
         contrasena: password,
       });

@@ -2,20 +2,22 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 
 const COLOR = '#3B82F6';
-const API = process.env.REACT_APP_API_URL || 'http://localhost:4000';
-const glass = { background: 'rgba(13,22,42,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '16px' };
-const inp = { background: 'rgba(7,12,24,0.6)', border: '1px solid rgba(59,130,246,0.18)', borderRadius: '10px', color: '#EFF6FF', padding: '10px 14px', fontSize: '13.5px', fontFamily: "'Inter',sans-serif", outline: 'none', width: '100%', boxSizing: 'border-box' };
-const btn = (c=COLOR) => ({ background:`${c}18`, border:`1px solid ${c}40`, color:c, padding:'9px 18px', borderRadius:'10px', cursor:'pointer', fontSize:'13px', fontWeight:'600', fontFamily:"'Inter',sans-serif", transition:'background 0.15s' });
+const API  = process.env.REACT_APP_API_URL  || 'http://localhost:4000';
+const NOTIF = process.env.REACT_APP_NOTIF_URL || 'http://localhost:5001';
+const NOTIF_KEY = process.env.REACT_APP_INTERNAL_API_KEY || 'clave-interna-asilo-2026';
 
-const EMPTY = { codigo:'', nombres:'', fecha_nacimiento:'', fecha_ingreso:'', motivo_reclusion:'', psicopatologia:'', estado:'Activo' };
-const ESTADOS = ['Activo', 'Egresado', 'Fallecido'];
-const EST_COLOR = { Activo:'#10B981', Egresado:'#F59E0B', Fallecido:'#475569' };
-const EST_ICON  = { Activo:'✅', Egresado:'🚪', Fallecido:'🕊️' };
+const glass = { background:'rgba(13,22,42,0.7)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', border:'1px solid rgba(59,130,246,0.12)', borderRadius:'16px' };
+const inp   = { background:'rgba(7,12,24,0.6)', border:'1px solid rgba(59,130,246,0.18)', borderRadius:'10px', color:'#EFF6FF', padding:'10px 14px', fontSize:'13.5px', fontFamily:"'Inter',sans-serif", outline:'none', width:'100%', boxSizing:'border-box' };
+const btn   = (c=COLOR) => ({ background:`${c}18`, border:`1px solid ${c}40`, color:c, padding:'9px 18px', borderRadius:'10px', cursor:'pointer', fontSize:'13px', fontWeight:'600', fontFamily:"'Inter',sans-serif", transition:'background 0.15s' });
+
+const EMPTY  = { codigo:'', nombres:'', fecha_nacimiento:'', fecha_ingreso:'', motivo_reclusion:'', psicopatologia:'', estado:'Activo', nombre_familiar:'', correo_familiar:'' };
+const ESTADOS    = ['Activo','Egresado','Fallecido'];
+const EST_COLOR  = { Activo:'#10B981', Egresado:'#F59E0B', Fallecido:'#475569' };
+const EST_ICON   = { Activo:'✅', Egresado:'🚪', Fallecido:'🕊️' };
 
 function calcEdad(fecha_nacimiento) {
   if (!fecha_nacimiento) return '—';
-  const hoy = new Date();
-  const nac = new Date(fecha_nacimiento);
+  const hoy = new Date(); const nac = new Date(fecha_nacimiento);
   let edad = hoy.getFullYear() - nac.getFullYear();
   const m = hoy.getMonth() - nac.getMonth();
   if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
@@ -35,15 +37,22 @@ function StatCard({ label, value, icon, color, sub }) {
 }
 
 export default function Pacientes() {
-  const [data, setData] = useState([]);
-  const [form, setForm] = useState(EMPTY);
-  const [editId, setEditId] = useState(null);
-  const [modal, setModal] = useState(false);
-  const [search, setSearch] = useState('');
+  const [data, setData]               = useState([]);
+  const [form, setForm]               = useState(EMPTY);
+  const [editId, setEditId]           = useState(null);
+  const [estadoAnterior, setEstadoAnterior] = useState(null);
+  const [modal, setModal]             = useState(false);
+  const [search, setSearch]           = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Activo');
-  const [loading, setLoading] = useState(false);
-  const token = localStorage.getItem('token');
+  const [loading, setLoading]         = useState(false);
+  const [toast, setToast]             = useState(null);
+  const token   = localStorage.getItem('token');
   const headers = { 'Content-Type':'application/json', Authorization:`Bearer ${token}` };
+
+  const showToast = (msg, color='#10B981') => {
+    setToast({ msg, color });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -55,50 +64,84 @@ export default function Pacientes() {
   };
   useEffect(() => { load(); }, []);
 
-  const openNew = () => { setForm(EMPTY); setEditId(null); setModal(true); };
+  const openNew = () => { setForm(EMPTY); setEditId(null); setEstadoAnterior(null); setModal(true); };
   const openEdit = (p) => {
     setForm({
-      codigo: p.codigo || '',
-      nombres: p.nombres || '',
+      codigo:           p.codigo            || '',
+      nombres:          p.nombres           || '',
       fecha_nacimiento: p.fecha_nacimiento?.slice(0,10) || '',
-      fecha_ingreso: p.fecha_ingreso?.slice(0,10) || '',
-      motivo_reclusion: p.motivo_reclusion || '',
-      psicopatologia: p.psicopatologia || '',
-      estado: p.estado || 'Activo',
+      fecha_ingreso:    p.fecha_ingreso?.slice(0,10)    || '',
+      motivo_reclusion: p.motivo_reclusion  || '',
+      psicopatologia:   p.psicopatologia    || '',
+      estado:           p.estado            || 'Activo',
+      nombre_familiar:  p.nombre_familiar   || '',
+      correo_familiar:  p.correo_familiar   || '',
     });
+    setEstadoAnterior(p.estado || 'Activo');
     setEditId(p.id_paciente);
     setModal(true);
   };
+
+  const notificarFamiliar = async (paciente, estado, nombre_familiar, correo_familiar) => {
+    if (!correo_familiar) return;
+    try {
+      await fetch(`${NOTIF}/notificaciones/cambio-estado`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'X-API-Key': NOTIF_KEY },
+        body: JSON.stringify({ paciente, estado, nombre_familiar, correo_familiar }),
+      });
+    } catch (e) {
+      console.warn('No se pudo notificar al familiar:', e);
+    }
+  };
+
   const save = async () => {
     await fetch(
       editId ? `${API}/api/pacientes/${editId}` : `${API}/api/pacientes`,
       { method: editId ? 'PUT' : 'POST', headers, body: JSON.stringify(form) }
     );
+
+    // Notificar si el estado cambió o si es paciente nuevo
+    const estadoCambio = !editId || (estadoAnterior && estadoAnterior !== form.estado);
+    if (estadoCambio && form.correo_familiar) {
+      await notificarFamiliar(form.nombres, form.estado, form.nombre_familiar, form.correo_familiar);
+      showToast(`📧 Notificación enviada a ${form.correo_familiar}`);
+    } else {
+      showToast(editId ? '✅ Paciente actualizado' : '✅ Paciente creado');
+    }
+
     setModal(false);
     load();
   };
+
   const del = async (id) => {
-    if (!window.confirm('¿Eliminar paciente permanentemente? Esta acción no se puede deshacer.')) return;
-    await fetch(`${API}/api/pacientes/${id}`, { method: 'DELETE', headers });
+    if (!window.confirm('¿Eliminar paciente permanentemente?')) return;
+    await fetch(`${API}/api/pacientes/${id}`, { method:'DELETE', headers });
     load();
   };
 
-  // Filtro por estado + búsqueda por nombre
   const filtrados = data
     .filter(p => filtroEstado === 'Todos' || (p.estado || 'Activo') === filtroEstado)
     .filter(p => (p.nombres || '').toLowerCase().includes(search.toLowerCase()));
 
-  // Stats (siempre sobre todos los datos, no sobre el filtro)
   const activos    = data.filter(p => (p.estado || 'Activo') === 'Activo').length;
   const egresados  = data.filter(p => p.estado === 'Egresado').length;
   const fallecidos = data.filter(p => p.estado === 'Fallecido').length;
   const edades     = data.filter(p => p.fecha_nacimiento).map(p => calcEdad(p.fecha_nacimiento));
-  const promedioEdad = edades.length ? Math.round(edades.reduce((a,b) => a+b, 0) / edades.length) : 0;
+  const promedioEdad = edades.length ? Math.round(edades.reduce((a,b) => a+b,0) / edades.length) : 0;
 
   const FILTROS = ['Activo','Egresado','Fallecido','Todos'];
 
   return (
     <Layout modulo="Pacientes" color={COLOR} icono="🧑‍⚕️">
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position:'fixed', top:'20px', right:'20px', zIndex:999, background:toast.color, color:'#fff', padding:'12px 20px', borderRadius:'12px', fontWeight:'600', fontSize:'14px', boxShadow:'0 8px 32px rgba(0,0,0,0.4)', fontFamily:"'Inter',sans-serif" }}>
+          {toast.msg}
+        </div>
+      )}
+
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'28px',flexWrap:'wrap',gap:'12px'}}>
         <div>
           <h1 style={{fontFamily:"'Outfit',sans-serif",fontWeight:'800',fontSize:'24px',color:'#EFF6FF',margin:0}}>Pacientes</h1>
@@ -109,24 +152,21 @@ export default function Pacientes() {
 
       {/* Stat Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'14px',marginBottom:'28px'}}>
-        <StatCard label="Activos" value={activos} icon="✅" color="#10B981" sub="Residentes actuales" />
+        <StatCard label="Activos"       value={activos}            icon="✅" color="#10B981" sub="Residentes actuales" />
         <StatCard label="Promedio edad" value={`${promedioEdad} años`} icon="🎂" color="#F59E0B" />
-        <StatCard label="Egresados" value={egresados} icon="🚪" color="#F59E0B" sub="Salieron del asilo" />
-        <StatCard label="Fallecidos" value={fallecidos} icon="🕊️" color="#475569" sub="Historial completo" />
+        <StatCard label="Egresados"     value={egresados}          icon="🚪" color="#F59E0B" sub="Salieron del asilo" />
+        <StatCard label="Fallecidos"    value={fallecidos}         icon="🕊️" color="#475569" sub="Historial completo" />
       </div>
 
-      {/* Filtro de estado + búsqueda */}
+      {/* Filtros */}
       <div style={{...glass,padding:'16px',marginBottom:'20px',display:'flex',gap:'12px',flexWrap:'wrap',alignItems:'center'}}>
         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
           {FILTROS.map(f => (
             <button key={f} onClick={() => setFiltroEstado(f)} style={{
               padding:'6px 14px', borderRadius:'20px', fontSize:'12px', fontWeight:'600',
               cursor:'pointer', border:'none', fontFamily:"'Inter',sans-serif",
-              background: filtroEstado === f
-                ? (EST_COLOR[f] || COLOR)
-                : 'rgba(59,130,246,0.08)',
-              color: filtroEstado === f ? '#fff' : '#475569',
-              transition:'all 0.15s',
+              background: filtroEstado === f ? (EST_COLOR[f] || COLOR) : 'rgba(59,130,246,0.08)',
+              color: filtroEstado === f ? '#fff' : '#475569', transition:'all 0.15s',
             }}>
               {EST_ICON[f] || '📋'} {f}
             </button>
@@ -141,19 +181,19 @@ export default function Pacientes() {
           <table style={{width:'100%',borderCollapse:'collapse',minWidth:'700px'}}>
             <thead>
               <tr style={{borderBottom:'1px solid rgba(59,130,246,0.15)'}}>
-                {['ID','Código','Nombres','Edad','F. Ingreso','Estado','Acciones'].map(h=>(
+                {['ID','Código','Nombres','Edad','F. Ingreso','Familiar','Estado','Acciones'].map(h=>(
                   <th key={h} style={{padding:'14px 16px',textAlign:'left',color:'#475569',fontSize:'11px',fontFamily:"'JetBrains Mono',monospace",letterSpacing:'0.5px'}}>{h.toUpperCase()}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <tr><td colSpan="7" style={{textAlign:'center',padding:'40px',color:'#475569'}}>Cargando…</td></tr>
+                ? <tr><td colSpan="8" style={{textAlign:'center',padding:'40px',color:'#475569'}}>Cargando…</td></tr>
                 : filtrados.length === 0
-                  ? <tr><td colSpan="7" style={{textAlign:'center',padding:'40px',color:'#475569'}}>Sin registros</td></tr>
+                  ? <tr><td colSpan="8" style={{textAlign:'center',padding:'40px',color:'#475569'}}>Sin registros</td></tr>
                   : filtrados.map((p,i) => {
                     const est = p.estado || 'Activo';
-                    const ec = EST_COLOR[est] || '#475569';
+                    const ec  = EST_COLOR[est] || '#475569';
                     return (
                       <tr key={p.id_paciente} style={{borderBottom:'1px solid rgba(59,130,246,0.07)',background:i%2===0?'transparent':'rgba(59,130,246,0.02)'}}>
                         <td style={{padding:'12px 16px',color:'#475569',fontSize:'12px',fontFamily:"'JetBrains Mono',monospace"}}>#{p.id_paciente}</td>
@@ -161,6 +201,15 @@ export default function Pacientes() {
                         <td style={{padding:'12px 16px',color:'#EFF6FF',fontWeight:'500'}}>{p.nombres}</td>
                         <td style={{padding:'12px 16px',color:'#94A3B8'}}>{calcEdad(p.fecha_nacimiento)} años</td>
                         <td style={{padding:'12px 16px',color:'#94A3B8',fontSize:'12px',fontFamily:"'JetBrains Mono',monospace"}}>{p.fecha_ingreso?.slice(0,10)||'—'}</td>
+                        <td style={{padding:'12px 16px'}}>
+                          {p.correo_familiar
+                            ? <div>
+                                <div style={{color:'#EFF6FF',fontSize:'12px'}}>{p.nombre_familiar||'—'}</div>
+                                <div style={{color:'#3B82F6',fontSize:'11px',fontFamily:"'JetBrains Mono',monospace"}}>{p.correo_familiar}</div>
+                              </div>
+                            : <span style={{color:'#334155',fontSize:'12px'}}>Sin registrar</span>
+                          }
+                        </td>
                         <td style={{padding:'12px 16px'}}>
                           <span style={{background:`${ec}18`,border:`1px solid ${ec}35`,color:ec,padding:'3px 10px',borderRadius:'20px',fontSize:'11px',fontWeight:'600'}}>
                             {EST_ICON[est]} {est}
@@ -184,17 +233,22 @@ export default function Pacientes() {
       {/* Modal */}
       {modal && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
-          <div style={{...glass,padding:'32px',width:'100%',maxWidth:'520px',borderTop:`2.5px solid ${COLOR}`,maxHeight:'90vh',overflowY:'auto'}}>
+          <div style={{...glass,padding:'32px',width:'100%',maxWidth:'560px',borderTop:`2.5px solid ${COLOR}`,maxHeight:'90vh',overflowY:'auto'}}>
             <h2 style={{fontFamily:"'Outfit',sans-serif",fontWeight:'700',fontSize:'20px',color:'#EFF6FF',margin:'0 0 24px'}}>{editId?'Editar Paciente':'Nuevo Paciente'}</h2>
             <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+
               <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Código</label><input style={inp} value={form.codigo} onChange={e=>setForm({...form,codigo:e.target.value})} placeholder="Ej: PAC-001" /></div>
               <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Nombres completos</label><input style={inp} value={form.nombres} onChange={e=>setForm({...form,nombres:e.target.value})} /></div>
+
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
                 <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Fecha de nacimiento</label><input style={inp} type="date" value={form.fecha_nacimiento} onChange={e=>setForm({...form,fecha_nacimiento:e.target.value})} /></div>
                 <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Fecha de ingreso</label><input style={inp} type="date" value={form.fecha_ingreso} onChange={e=>setForm({...form,fecha_ingreso:e.target.value})} /></div>
               </div>
+
               <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Motivo de reclusión</label><textarea style={{...inp,resize:'vertical',minHeight:'70px'}} value={form.motivo_reclusion} onChange={e=>setForm({...form,motivo_reclusion:e.target.value})} /></div>
               <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Psicopatología</label><textarea style={{...inp,resize:'vertical',minHeight:'70px'}} value={form.psicopatologia} onChange={e=>setForm({...form,psicopatologia:e.target.value})} /></div>
+
+              {/* Estado */}
               <div>
                 <label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'8px'}}>Estado del paciente</label>
                 <div style={{display:'flex',gap:'10px'}}>
@@ -212,6 +266,21 @@ export default function Pacientes() {
                   ))}
                 </div>
               </div>
+
+              {/* Sección familiar */}
+              <div style={{borderTop:'1px solid rgba(59,130,246,0.15)',paddingTop:'14px',marginTop:'4px'}}>
+                <div style={{color:'#3B82F6',fontSize:'11px',fontFamily:"'JetBrains Mono',monospace",letterSpacing:'0.5px',marginBottom:'12px'}}>📧 CONTACTO FAMILIAR — para notificaciones</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                  <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Nombre del familiar</label><input style={inp} value={form.nombre_familiar} onChange={e=>setForm({...form,nombre_familiar:e.target.value})} placeholder="Ej: María García" /></div>
+                  <div><label style={{color:'#94A3B8',fontSize:'12px',display:'block',marginBottom:'6px'}}>Correo electrónico</label><input style={inp} type="email" value={form.correo_familiar} onChange={e=>setForm({...form,correo_familiar:e.target.value})} placeholder="familiar@email.com" /></div>
+                </div>
+                {form.correo_familiar && (
+                  <div style={{marginTop:'8px',background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.2)',borderRadius:'8px',padding:'8px 12px',color:'#94A3B8',fontSize:'12px'}}>
+                    📬 Se enviará notificación a <strong style={{color:'#3B82F6'}}>{form.correo_familiar}</strong> cuando cambie el estado del paciente.
+                  </div>
+                )}
+              </div>
+
             </div>
             <div style={{display:'flex',gap:'12px',marginTop:'24px',justifyContent:'flex-end'}}>
               <button style={btn('#475569')} onClick={()=>setModal(false)}>Cancelar</button>
